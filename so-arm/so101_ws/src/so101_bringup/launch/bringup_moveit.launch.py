@@ -170,6 +170,7 @@ def _launch_setup(context, *args, **kwargs):
     )
 
     return [
+        joint_state_publisher,
         robot_state_publisher,
         ros2_control_node,
         spawn_jsb,
