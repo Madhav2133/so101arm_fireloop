@@ -2,6 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="so101_new_calib">
     <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
     <xacro:arg name="use_fake_hardware" default="true" />
+    <xacro:arg name="use_isaac" default="false" />
 
     <!-- Import so101_new_calib urdf file -->
     <xacro:include filename="$(find so101_description)/urdf/so101_new_calib.urdf" />
@@ -10,6 +11,6 @@
     <xacro:include filename="so101_new_calib.ros2_control.xacro" />
 
 
-    <xacro:so101_new_calib_ros2_control name="FakeSystem" initial_positions_file="$(arg initial_positions_file)" use_fake_hardware="$(arg use_fake_hardware)"/>
+    <xacro:so101_new_calib_ros2_control name="FakeSystem" initial_positions_file="$(arg initial_positions_file)" use_fake_hardware="$(arg use_fake_hardware)" use_isaac="$(arg use_isaac)"/>
 
 </robot>

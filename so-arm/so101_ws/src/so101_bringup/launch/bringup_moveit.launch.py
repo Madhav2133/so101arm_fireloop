@@ -56,41 +56,67 @@ def _moveit_params(moveit_config):
 
 
 def generate_launch_description():
-    declared_arguments = [DeclareLaunchArgument("moveit_config_pkg", default_value="so101_moveit_config"),
-                          DeclareLaunchArgument("robot_name", default_value="so101_new_calib"),
-                          DeclareLaunchArgument("rviz_config", default_value="config/moveit.rviz"),
-                          DeclareLaunchArgument("ros2_controllers_file", default_value="config/ros2_controllers.yaml"),
-                          DeclareLaunchArgument("use_sim_time", default_value="false"), DeclareLaunchArgument(
+    declared_arguments = [
+        DeclareLaunchArgument("moveit_config_pkg", default_value="so101_moveit_config"),
+        DeclareLaunchArgument("robot_name", default_value="so101_new_calib"),
+        DeclareLaunchArgument("rviz_config", default_value="config/moveit.rviz"),
+        DeclareLaunchArgument("ros2_controllers_file", default_value="config/ros2_controllers.yaml"),
+        DeclareLaunchArgument("use_sim_time", default_value="true"),
+        DeclareLaunchArgument(
             "controller_names",
             default_value="joint_state_broadcaster arm_controller gripper_controller",
             description="Space-separated ros2_control controller names to spawn.",
-        ), DeclareLaunchArgument(
+        ),
+        # default to false; Isaac provides real hw interface
+        DeclareLaunchArgument(
             "use_fake_hardware",
+            default_value="false",
+            description="Use mock ros2_control hardware instead of real hardware. Set true for standalone testing.",
+        ),
+        # TopicBasedSystem bridging /isaac_joint_states + /isaac_joint_command 
+        DeclareLaunchArgument(
+            "use_isaac",
             default_value="true",
-            description="Use mock ros2_control hardware instead of real hardware",
-        )]
+            description="Use Isaac Sim as hardware backend via topic_based_ros2_control/TopicBasedSystem.",
+        ),
+        # world->robot static TF 
+        DeclareLaunchArgument(
+            "robot_base_link",
+            default_value="so101_base_link",
+            description="Name of the robot base link frame for the world->robot static TF. "
+                        "Check your URDF and update this if needed.",
+        ),
+        # world frame origin offset (x y z roll pitch yaw)
+        DeclareLaunchArgument("world_x", default_value="0.0"),
+        DeclareLaunchArgument("world_y", default_value="0.0"),
+        DeclareLaunchArgument("world_z", default_value="0.0"),
+        DeclareLaunchArgument("world_roll",  default_value="0.0"),
+        DeclareLaunchArgument("world_pitch", default_value="0.0"),
+        DeclareLaunchArgument("world_yaw",   default_value="0.0"),
+    ]
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=_launch_setup)])
 
 
 def _launch_setup(context, *args, **kwargs):
     moveit_config_pkg = LaunchConfiguration("moveit_config_pkg").perform(context)
-    robot_name = LaunchConfiguration("robot_name").perform(context)
-
+    robot_name        = LaunchConfiguration("robot_name").perform(context)
     ros2_controllers_rel = LaunchConfiguration("ros2_controllers_file").perform(context)
-
-    use_sim_time = _as_bool(LaunchConfiguration("use_sim_time").perform(context))
+    use_sim_time      = _as_bool(LaunchConfiguration("use_sim_time").perform(context))
+    use_isaac = _as_bool(LaunchConfiguration("use_isaac").perform(context))
+    robot_base_link   = LaunchConfiguration("robot_base_link").perform(context)
 
     controller_names_str = LaunchConfiguration("controller_names").perform(context).strip()
     controller_names = controller_names_str.split() if controller_names_str else []
 
-    moveit_share = get_package_share_directory(moveit_config_pkg)
+    moveit_share    = get_package_share_directory(moveit_config_pkg)
     bringup_pkg_path = get_package_share_directory('so101_bringup')
     rviz_config_path = os.path.join(bringup_pkg_path, 'rviz', 'so101.rviz')
     ros2_controllers_path = os.path.join(moveit_share, ros2_controllers_rel)
 
     moveit_config = MoveItConfigsBuilder(robot_name, package_name=moveit_config_pkg).to_moveit_configs()
     moveit_common_params = _moveit_params(moveit_config)
+
     robot_description_content = ParameterValue(
         Command([
             "xacro ",
@@ -100,46 +126,66 @@ def _launch_setup(context, *args, **kwargs):
                 "so101_new_calib.urdf.xacro",
             ]),
             " use_fake_hardware:=", LaunchConfiguration("use_fake_hardware"),
-            " use_sim_time:=", LaunchConfiguration("use_sim_time"),
+            " use_isaac:=",         LaunchConfiguration("use_isaac"),
         ]),
         value_type=str,
     )
 
     robot_description = {"robot_description": robot_description_content}
 
+    # Robot State Publisher 
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
-        output="screen",
+        name="robot_state_publisher",
+        output="both",
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
-    # Publish /joint_states when ros2_control is not running
-    joint_state_publisher = Node(
-        package="joint_state_publisher",
-        executable="joint_state_publisher",
-        name="joint_state_publisher",
-        output="screen",
+    # Removed joint_state_publisher 
+    # Isaac Sim publishes joint states through joint_state_broadcaster.
+
+    # Static TF: world → robot base link 
+    world_to_robot_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_publisher_world_to_robot",
+        output="log",
+        arguments=[
+            LaunchConfiguration("world_x"),
+            LaunchConfiguration("world_y"),
+            LaunchConfiguration("world_z"),
+            LaunchConfiguration("world_roll"),
+            LaunchConfiguration("world_pitch"),
+            LaunchConfiguration("world_yaw"),
+            "world",
+            robot_base_link,
+        ],
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
+    # ros2_control node 
     ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
         output="screen",
         parameters=[
-            robot_description,  # ← FROM XACRO
-            ros2_controllers_path,  # controllers yaml
+            ros2_controllers_path,
             {"use_sim_time": use_sim_time},
-        ]
+        ],
+        remappings=[
+            ("/controller_manager/robot_description", "/robot_description"),
+        ],
     )
 
+    # Controller spawners 
     spawn_jsb = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
-        output="screen"
+        output="screen",
     )
+
     spawners = []
     for c in controller_names:
         if c == "joint_state_broadcaster":
@@ -149,33 +195,35 @@ def _launch_setup(context, *args, **kwargs):
                 package="controller_manager",
                 executable="spawner",
                 arguments=[c, "--controller-manager", "/controller_manager"],
-                output="screen"
+                output="screen",
             )
         )
 
+    # MoveGroup 
     move_group = Node(
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
         parameters=[moveit_common_params, {"use_sim_time": use_sim_time}],
+        arguments=["--ros-args", "--log-level", "info"],
     )
 
+    # RViz2 
     rviz2 = Node(
         package="rviz2",
         executable="rviz2",
         name="rviz2",
-        output="screen",
+        output="log",
         arguments=["-d", rviz_config_path],
         parameters=[moveit_common_params, {"use_sim_time": use_sim_time}],
     )
 
     return [
-        joint_state_publisher,
+        world_to_robot_tf,       # world → base link static TF for Isaac
         robot_state_publisher,
-        ros2_control_node,
+        ros2_control_node,       # no robot_description param, added remap
         spawn_jsb,
         *spawners,
         move_group,
-        rviz2
+        rviz2,
     ]
-

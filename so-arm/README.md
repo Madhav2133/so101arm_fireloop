@@ -17,7 +17,7 @@ You are responsible for setting up the runtime environment and resolving any mis
 
 ## Prerequisites
 
-- Ubuntu 22.04
+- Ubuntu 24.04
 - ROS 2 Jazzy installed
 - Isaac Sim installed and configured
 - MoveIt 2 compatible with ROS 2 Jazzy
