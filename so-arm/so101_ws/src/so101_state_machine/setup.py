@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bt_node = so101_state_machine.bt_node:main',
+            'cup_detector = so101_state_machine.cup_detector:main',
         ],
     },
 )
