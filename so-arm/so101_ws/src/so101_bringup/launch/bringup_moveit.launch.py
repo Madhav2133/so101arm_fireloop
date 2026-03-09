@@ -218,12 +218,34 @@ def _launch_setup(context, *args, **kwargs):
         parameters=[moveit_common_params, {"use_sim_time": use_sim_time}],
     )
 
+    # Static TF: world → sim_camera (overhead fixed camera)
+    camera_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_publisher_camera",
+        output="log",
+        arguments=["0.0", "0.0", "1.5", "3.1416", "0.0", "0.0",
+                   "base_link", "sim_camera"],
+        parameters=[{"use_sim_time": use_sim_time}],
+    )
+
+    # Cup detector 
+    cup_detector = Node(
+        package="so101_state_machine",
+        executable="cup_detector",
+        name="cup_detector",
+        output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
+    )
+
     return [
-        world_to_robot_tf,       # world → base link static TF for Isaac
+        world_to_robot_tf,       
+        camera_tf,               
         robot_state_publisher,
-        ros2_control_node,       # no robot_description param, added remap
+        ros2_control_node,       
         spawn_jsb,
         *spawners,
         move_group,
         rviz2,
+        cup_detector,
     ]
