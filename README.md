@@ -13,8 +13,8 @@ Interview Assignment for Fireloop AI
 
 ## Documentation:
 
-- Demo Video: [click here]()
-- Architecure Documentation: [click here]()
+- Demo Video: [click here](https://drive.google.com/drive/folders/1M43n1khNP4P0CZdEQBcNHwvfizektMTU?usp=sharing)
+- Architecure Documentation: [click here](https://drive.google.com/file/d/16gAh1jxevU3GOiMJXvHqAkutsEcrrpV-/view?usp=sharing)
 
 ## Usage
 
