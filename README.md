@@ -1,5 +1,9 @@
 # SO101 Arm - Pick and Place
 
+https://github.com/user-attachments/assets/5f53a56e-c1e4-47c2-a694-c1ae24f42cee
+
+
+
 ## Author:
 
 Venkata Madhav Tadavarthi (vmadhav@umd.edu)
